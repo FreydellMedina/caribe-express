@@ -1,0 +1,6 @@
+{
+  "name": "Caribe Express",
+  "description": "Plataforma de cotización, geolocalización y marketplace de mudanzas y transporte en la Costa Caribe",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

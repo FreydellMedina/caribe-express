@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  hashedPassword String
+  fullName       String
+  phone          String?
+  role           String          @default("cliente") // cliente, transportista, admin
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  carrierProfile CarrierProfile?
+  orders         MoveOrder[]
+}
+
+model CarrierProfile {
+  id                            String            @id @default(uuid())
+  userId                        String            @unique
+  user                          User              @relation(fields: [userId], references: [id])
+  companyName                   String?
+  documentId                    String
+  phone                         String
+  email                         String
+  baseCity                      String
+  coverageZones                 Json?
+  vehicleType                   String
+  vehiclePlate                  String
+  vehicleModel                  String
+  capacityKg                    Int               @default(3000)
+  volumeM3                      Float             @default(18.0)
+  basePrice                     Float             @default(150000.0)
+  pricePerKm                    Float             @default(2500.0)
+  floorWithoutElevatorSurcharge Float             @default(20000.0)
+  helperRate                    Float             @default(40000.0)
+  rating                        Float             @default(5.0)
+  totalTrips                    Int               @default(0)
+  verificationStatus            String            @default("pendiente")
+  photoUrl                      String?
+  avatarUrl                     String?
+  bio                           String?
+  availableNow                  Boolean           @default(true)
+  totalEarnings                 Float             @default(0.0)
+  createdAt                     DateTime          @default(now())
+  documents                     CarrierDocument[]
+  assignedOrders                MoveOrder[]
+}
+
+model CarrierDocument {
+  id         String         @id @default(uuid())
+  carrierId  String
+  carrier    CarrierProfile @relation(fields: [carrierId], references: [id])
+  name       String
+  type       String
+  status     String         @default("pendiente")
+  fileName   String?
+  expiryDate String?
+  feedback   String?
+  createdAt  DateTime       @default(now())
+}
+
+model MoveOrder {
+  id                  String          @id @default(uuid())
+  trackingCode        String          @unique
+  clientId            String?
+  client              User?           @relation(fields: [clientId], references: [id])
+  clientName          String
+  clientPhone         String
+  carrierId           String?
+  carrier             CarrierProfile? @relation(fields: [carrierId], references: [id])
+  carrierName         String?
+  carrierPhone        String?
+  carrierVehiclePlate String?
+  status              String          @default("cotizado")
+  originAddress       String
+  originCity          String
+  originFloor         Int             @default(1)
+  originElevator      Boolean         @default(true)
+  destAddress         String
+  destCity            String
+  destFloor           Int             @default(1)
+  destElevator        Boolean         @default(true)
+  propertyType        String          @default("apartamento")
+  suggestedVehicle    String          @default("furgon")
+  distanceKm          Float           @default(0.0)
+  estimatedMinutes    Int             @default(0)
+  tollCount           Int             @default(0)
+  baseRate            Float           @default(0.0)
+  distanceCost        Float           @default(0.0)
+  stairSurcharge      Float           @default(0.0)
+  helpersCost         Float           @default(0.0)
+  packingCost         Float           @default(0.0)
+  insuranceCost       Float           @default(0.0)
+  totalPrice          Float           @default(0.0)
+  scheduledDate       String
+  scheduledTime       String
+  notes               String?
+  rating              Float?
+  clientReview        String?
+  createdAt           DateTime        @default(now())
+  timeline            OrderTimeline[]
+}
+
+model OrderTimeline {
+  id            String    @id @default(uuid())
+  orderId       String
+  order         MoveOrder @relation(fields: [orderId], references: [id])
+  status        String
+  timestampDesc String
+  title         String
+  description   String
+  createdAt     DateTime  @default(now())
+}
+
+model Dispute {
+  id           String    @id @default(uuid())
+  trackingCode String
+  orderId      String
+  reportedBy   String
+  reporterName String
+  reason       String
+  description  String
+  status       String    @default("abierta")
+  resolution   String?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+}
+
+model PrivacyConsent {
+  id               String   @id @default(uuid())
+  userName         String
+  userEmail        String
+  userRole         String
+  ipAddress        String
+  regulationNotice String   @default("Ley 1581 de 2012 (Colombia) / GDPR")
+  acceptedAt       DateTime @default(now())
+}
+
