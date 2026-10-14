@@ -16,12 +16,34 @@ import { AdminPanel } from './components/AdminPanel';
 import { ClientMovesHistory } from './components/ClientMovesHistory';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { TrackingModal } from './components/TrackingModal';
+import { AuthModal, AuthUser } from './components/AuthModal';
 import { Footer } from './components/Footer';
-import { ShieldCheck, Sparkles, Navigation, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, LogIn, LogOut, User } from 'lucide-react';
+
+// Restore session from sessionStorage on page load
+function restoreSession(): { user: AuthUser | null; token: string | null } {
+  try {
+    const token = sessionStorage.getItem('caribe_token');
+    const userStr = sessionStorage.getItem('caribe_user');
+    if (token && userStr) {
+      return { user: JSON.parse(userStr) as AuthUser, token };
+    }
+  } catch { /* noop */ }
+  return { user: null, token: null };
+}
 
 export default function App() {
-  // App state
-  const [currentRole, setCurrentRole] = useState<UserRole>('cliente');
+  const session = restoreSession();
+
+  // Auth state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(session.user);
+  const [authToken, setAuthToken] = useState<string | null>(session.token);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // App state — role driven by login when authenticated
+  const [currentRole, setCurrentRole] = useState<UserRole>(
+    session.user ? (session.user.role as UserRole) : 'cliente'
+  );
   const [currentTab, setCurrentTab] = useState<string>('cotizador');
 
   // Database records (in-memory state with realistic mock data, synced with FastAPI backend)
@@ -53,6 +75,24 @@ export default function App() {
     });
   }, []);
 
+  const handleLoginSuccess = (user: AuthUser, token: string) => {
+    setAuthUser(user);
+    setAuthToken(token);
+    const role = user.role as UserRole;
+    setCurrentRole(role);
+    if (role === 'transportista') setCurrentTab('transportistas');
+    else if (role === 'admin') setCurrentTab('admin');
+    else setCurrentTab('cotizador');
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('caribe_token');
+    sessionStorage.removeItem('caribe_user');
+    setAuthUser(null);
+    setAuthToken(null);
+    setCurrentRole('cliente');
+    setCurrentTab('cotizador');
+  };
 
   // Modals state
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
@@ -61,7 +101,7 @@ export default function App() {
 
   // Handle new order creation
   const handleOrderCreated = (newOrder: MoveOrder) => {
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev) => [newOrder, ...prev]);    
     setActiveTrackingCode(newOrder.trackingCode);
   };
 
@@ -268,22 +308,44 @@ export default function App() {
 
       {/* Main App Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
-        {/* Role Helper Banner */}
+      {/* Auth Status + Role Helper Banner */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-slate-600">
-            <span className="font-semibold text-slate-900">Vista Interactiva:</span>
-            <span>
-              Actualmente estás interactuando como{' '}
-              <strong className="text-orange-600 uppercase font-mono font-bold">
-                {currentRole}
-              </strong>
-            </span>
-            <span className="text-slate-400 hidden sm:inline">|</span>
-            <span className="text-slate-500 hidden sm:inline">
-              {currentRole === 'cliente' && 'Cotiza mudanzas, compara tarifas por km, pisos y solicita servicios.'}
-              {currentRole === 'transportista' && 'Gestiona tus órdenes activas, actualiza trayectos y revisa documentos.'}
-              {currentRole === 'admin' && 'Modera transportistas, valida SOAT/RUT y resuelve disputas de clientes.'}
-            </span>
+            {authUser ? (
+              <>
+                <span className="w-7 h-7 rounded-full bg-orange-100 border border-orange-200 text-orange-600 flex items-center justify-center shrink-0 font-bold text-xs">
+                  {authUser.full_name.charAt(0).toUpperCase()}
+                </span>
+                <span className="font-semibold text-slate-900">{authUser.full_name}</span>
+                <span className="text-slate-400">|</span>
+                <span className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-bold uppercase font-mono text-[10px]">
+                  {currentRole}
+                </span>
+                {backendConnected && (
+                  <span className="flex items-center gap-1 text-emerald-600 text-[10px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Backend conectado
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <User className="w-4 h-4 text-slate-400" />
+                <span className="font-semibold text-slate-900">Vista Interactiva:</span>
+                <span>
+                  Rol:{' '}
+                  <strong className="text-orange-600 uppercase font-mono font-bold">
+                    {currentRole}
+                  </strong>
+                </span>
+                <span className="text-slate-400 hidden sm:inline">|</span>
+                <span className="text-slate-500 hidden sm:inline">
+                  {currentRole === 'cliente' && 'Cotiza mudanzas, compara tarifas por km, pisos y solicita servicios.'}
+                  {currentRole === 'transportista' && 'Gestiona tus órdenes activas, actualiza trayectos y revisa documentos.'}
+                  {currentRole === 'admin' && 'Modera transportistas, valida SOAT/RUT y resuelve disputas de clientes.'}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -295,6 +357,30 @@ export default function App() {
                 {currentTab === 'mis_mudanzas' ? '← Ir a Cotizador' : 'Ver Mis Mudanzas (' + orders.length + ')'}
               </button>
             )}
+
+            {/* Login button (show when not authenticated) */}
+            {!authUser && (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Iniciar Sesión
+              </button>
+            )}
+
+            {/* Logout button (show when authenticated) */}
+            {authUser && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-600 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Cerrar Sesión
+              </button>
+            )}
+
+            {/* Role toggle (always available for demo exploration) */}
             <button
               onClick={() => {
                 const nextRole = currentRole === 'cliente' ? 'transportista' : currentRole === 'transportista' ? 'admin' : 'cliente';
@@ -305,10 +391,11 @@ export default function App() {
               }}
               className="text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-lg transition-colors"
             >
-              Cambiar de Rol ⇄
+              Cambiar Rol ⇄
             </button>
           </div>
         </div>
+
 
         {/* Tab Router based on role and selection */}
         {currentRole === 'cliente' && (
@@ -401,6 +488,14 @@ export default function App() {
         orders={orders}
         initialTrackingCode={activeTrackingCode}
         onReportDispute={handleReportDispute}
+      />
+
+      {/* Login / Register Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+        defaultRole={currentRole}
       />
     </div>
   );
