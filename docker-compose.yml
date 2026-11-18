@@ -1,5 +1,17 @@
 services:
-  # 1. Backend API (Python 3.11 + FastAPI + SQLAlchemy)
+  # 1. Base de Datos MongoDB (localhost:27017)
+  mongodb:
+    image: mongo:7.0
+    container_name: caribe-express-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - caribe-network
+
+  # 2. Backend API (Python 3.11 + FastAPI + MongoDB)
   backend:
     build:
       context: .
@@ -13,6 +25,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=caribe_express
+    depends_on:
+      - mongodb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -21,7 +37,7 @@ services:
     networks:
       - caribe-network
 
-  # 2. Frontend Web (React 19 + Tailwind CSS + Nginx Reverse Proxy)
+  # 3. Frontend Web (React + Tailwind CSS + Nginx)
   frontend:
     build:
       context: .
@@ -37,28 +53,9 @@ services:
     networks:
       - caribe-network
 
-  # 3. Base de Datos Local con Soporte PostGIS (Opcional si se usa Supabase)
-  postgres:
-    image: postgis/postgis:16-3.4-alpine
-    container_name: caribe-express-postgres
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Thegreen098123.
-      POSTGRES_DB: postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - caribe-network
-    profiles:
-      - local-db
-
 networks:
   caribe-network:
     driver: bridge
 
 volumes:
-  postgres_data:
-
+  mongodb_data:

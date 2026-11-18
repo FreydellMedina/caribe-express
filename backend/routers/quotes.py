@@ -1,9 +1,7 @@
 import math
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from backend.database import get_db
-from backend.models import CarrierProfile
 from backend.schemas import QuoteRequest, QuoteResponse, QuoteBreakdown
 
 router = APIRouter(prefix="/quotes", tags=["Motor de Cotización y Precios"])
@@ -51,18 +49,18 @@ def get_distance_and_duration(origin_city: str, dest_city: str):
     return 195.0, 210, 2 # Default regional estimate
 
 @router.post("/calculate", response_model=QuoteResponse)
-def calculate_quote(req: QuoteRequest, db: Session = Depends(get_db)):
+def calculate_quote(req: QuoteRequest, db = Depends(get_db)):
     # 1. Total volume m3
     total_volume_m3 = sum(item.volumeM3 * item.count for item in req.inventory)
     if total_volume_m3 == 0:
         total_volume_m3 = 10.0 # Default base load
 
     # 2. Suggested vehicle
-    if total_volume_m3 > 25.0:
+    if total_volume_m3 >= 20.0:
         suggested_vehicle = "camion_grande"
-    elif total_volume_m3 > 14.0:
+    elif total_volume_m3 > 12.0:
         suggested_vehicle = "camion_turbo"
-    elif total_volume_m3 > 6.0:
+    elif total_volume_m3 > 5.0:
         suggested_vehicle = "furgon"
     else:
         suggested_vehicle = "pickup"
@@ -77,12 +75,12 @@ def calculate_quote(req: QuoteRequest, db: Session = Depends(get_db)):
     helper_unit = BASE_VEHICLE_RATES[suggested_vehicle]["helper"]
 
     if req.carrierId:
-        carrier = db.query(CarrierProfile).filter(CarrierProfile.id == req.carrierId).first()
+        carrier = db.carrier_profiles.find_one({"$or": [{"id": req.carrierId}, {"_id": req.carrierId}]})
         if carrier:
-            base_rate = carrier.base_price
-            per_km = carrier.price_per_km
-            extra_stair = carrier.floor_without_elevator_surcharge
-            helper_unit = carrier.helper_rate
+            base_rate = float(carrier.get("base_price", carrier.get("basePrice", base_rate)))
+            per_km = float(carrier.get("price_per_km", carrier.get("pricePerKm", per_km)))
+            extra_stair = float(carrier.get("floor_without_elevator_surcharge", carrier.get("floorWithoutElevatorSurcharge", extra_stair)))
+            helper_unit = float(carrier.get("helper_rate", carrier.get("helperRate", helper_unit)))
 
     # 5. Calculate cost breakdown
     distance_cost = round(km * per_km)

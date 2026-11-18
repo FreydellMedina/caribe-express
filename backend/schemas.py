@@ -26,12 +26,25 @@ class UserResponse(UserBase):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
+    expires_in: Optional[int] = None
     user: UserResponse
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
     role: Optional[str] = None
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=6)
 
 
 # ----------------- CARRIERS -----------------
@@ -172,8 +185,8 @@ class OrderResponse(BaseModel):
     distanceKm: float
     estimatedMinutes: int
     totalPrice: float
-    scheduledDate: str
-    scheduledTime: str
+    scheduledDate: Optional[str] = None
+    scheduledTime: Optional[str] = None
     notes: Optional[str] = None
     timeline: List[TimelineEventSchema] = []
     rating: Optional[float] = None

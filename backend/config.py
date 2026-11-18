@@ -7,20 +7,15 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # Database
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://postgres.ucrepfkdtahuqyfohsla:Thegreen098123.@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
-    )
-    DIRECT_URL: str = os.getenv(
-        "DIRECT_URL",
-        "postgresql://postgres.ucrepfkdtahuqyfohsla:Thegreen098123.@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
-    )
+    # Database - MongoDB (Base de datos exclusiva)
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "caribe_express")
     
-    # JWT & Auth
+    # JWT & Auth (Hardened for Web & Flutter Mobile Apps)
     SECRET_KEY: str = os.getenv("SECRET_KEY", "caribe-express-super-secret-key-prod-2026-mudanzas")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30 # 30 days for mobile app session longevity
     
     # Google Maps Platform (Places Autocomplete, Distance Matrix, Directions API)
     GOOGLE_MAPS_API_KEY: str = os.getenv("GOOGLE_MAPS_API_KEY", "")

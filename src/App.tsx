@@ -14,11 +14,13 @@ import { MarketplaceView } from './components/MarketplaceView';
 import { CarrierDashboard } from './components/CarrierDashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { ClientMovesHistory } from './components/ClientMovesHistory';
+import { HowItWorksView } from './components/HowItWorksView';
+import { RoleGateScreen } from './components/RoleGateScreen';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { TrackingModal } from './components/TrackingModal';
 import { AuthModal, AuthUser } from './components/AuthModal';
 import { Footer } from './components/Footer';
-import { ShieldCheck, LogIn, LogOut, User } from 'lucide-react';
+import { ShieldCheck, LogIn, LogOut, User, Compass, Lock, CheckCircle2 } from 'lucide-react';
 
 // Restore session from sessionStorage on page load
 function restoreSession(): { user: AuthUser | null; token: string | null } {
@@ -39,14 +41,13 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(session.user);
   const [authToken, setAuthToken] = useState<string | null>(session.token);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalRole, setAuthModalRole] = useState<UserRole>('cliente');
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
-  // App state — role driven by login when authenticated
-  const [currentRole, setCurrentRole] = useState<UserRole>(
-    session.user ? (session.user.role as UserRole) : 'cliente'
-  );
+  // Navigation tab state: 'como_funciona' | 'cotizador' | 'marketplace' | 'transportistas' | 'admin' | 'mis_mudanzas'
   const [currentTab, setCurrentTab] = useState<string>('cotizador');
 
-  // Database records (in-memory state with realistic mock data, synced with FastAPI backend)
+  // Database records (in-memory state with realistic mock data, synced with FastAPI MongoDB backend)
   const [carriers, setCarriers] = useState<Carrier[]>(MOCK_CARRIERS);
   const [orders, setOrders] = useState<MoveOrder[]>(MOCK_ORDERS);
   const [disputes, setDisputes] = useState<Dispute[]>(MOCK_DISPUTES);
@@ -54,7 +55,7 @@ export default function App() {
   const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState<boolean>(true);
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
 
-  // Synchronize with FastAPI backend if available
+  // Synchronize with FastAPI MongoDB backend if available
   useEffect(() => {
     apiService.checkHealth().then((isHealthy) => {
       if (isHealthy) {
@@ -75,11 +76,16 @@ export default function App() {
     });
   }, []);
 
+  const openAuthWithConfig = (role: UserRole = 'cliente', mode: 'login' | 'register' = 'login') => {
+    setAuthModalRole(role);
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
   const handleLoginSuccess = (user: AuthUser, token: string) => {
     setAuthUser(user);
     setAuthToken(token);
     const role = user.role as UserRole;
-    setCurrentRole(role);
     if (role === 'transportista') setCurrentTab('transportistas');
     else if (role === 'admin') setCurrentTab('admin');
     else setCurrentTab('cotizador');
@@ -90,7 +96,6 @@ export default function App() {
     sessionStorage.removeItem('caribe_user');
     setAuthUser(null);
     setAuthToken(null);
-    setCurrentRole('cliente');
     setCurrentTab('cotizador');
   };
 
@@ -101,7 +106,7 @@ export default function App() {
 
   // Handle new order creation
   const handleOrderCreated = (newOrder: MoveOrder) => {
-    setOrders((prev) => [newOrder, ...prev]);    
+    setOrders((prev) => [newOrder, ...prev]);
     setActiveTrackingCode(newOrder.trackingCode);
   };
 
@@ -231,20 +236,21 @@ export default function App() {
     reason: any,
     description: string
   ) => {
-    const reporterName = currentRole === 'transportista' ? 'Transportista Verificado' : 'Cliente Caribe Express';
+    const reporterRole = authUser?.role === 'transportista' ? 'transportista' : 'cliente';
+    const reporterName = authUser?.full_name || (reporterRole === 'transportista' ? 'Transportista Verificado' : 'Cliente Caribe Express');
     apiService.createDispute({
       orderId,
       trackingCode,
-      reportedBy: currentRole === 'transportista' ? 'transportista' : 'cliente',
+      reportedBy: reporterRole,
       reporterName,
       reason,
-      description
+      description,
     });
     const newDispute: Dispute = {
       id: `disp-${Date.now()}`,
       orderId,
       trackingCode,
-      reportedBy: currentRole === 'transportista' ? 'transportista' : 'cliente',
+      reportedBy: reporterRole,
       reporterName,
       reason,
       description,
@@ -257,12 +263,13 @@ export default function App() {
   // Accept privacy consent
   const handleAcceptPrivacy = (userName: string, userEmail: string) => {
     setHasAcceptedPrivacy(true);
-    apiService.recordConsent({ userName, userEmail, userRole: currentRole });
+    const activeRole = authUser?.role || 'cliente';
+    apiService.recordConsent({ userName, userEmail, userRole: activeRole });
     const newRecord: PrivacyConsentRecord = {
       id: `priv-${Date.now()}`,
       userName,
       userEmail,
-      userRole: currentRole,
+      userRole: activeRole,
       ipAddress: '190.248.81.14 (Caribe)',
       acceptedAt: new Date().toLocaleString(),
       regulationNotice: 'Ley 1581 de 2012 (Colombia) / GDPR',
@@ -270,203 +277,226 @@ export default function App() {
     setPrivacyLogs((prev) => [newRecord, ...prev]);
   };
 
-  return (
+  const isCarrierLoggedIn = authUser?.role === 'transportista';
+  const isAdminLoggedIn = authUser?.role === 'admin';
+  const isClientLoggedIn = authUser?.role === 'cliente';
 
+  return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 antialiased selection:bg-orange-500 selection:text-white">
       {/* Privacy Notice Banner if not yet explicitly acknowledged */}
       {!hasAcceptedPrivacy && (
-        <div className="bg-slate-900 text-slate-200 px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+        <div className="bg-slate-900 text-slate-200 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
             <span>
-              En cumplimiento de la <strong>Ley 1581 de 2012 (Habeas Data Colombia)</strong>, tus datos y geolocalización están protegidos con cifrado de extremo a extremo.
+              En cumplimiento de la <strong>Ley 1581 de 2012 (Habeas Data Colombia)</strong>, tus datos y geolocalización están protegidos con cifrado.
             </span>
           </div>
           <button
             onClick={() => setIsPrivacyModalOpen(true)}
             className="text-xs font-bold text-orange-400 hover:text-orange-300 underline underline-offset-2"
           >
-            Ver y Autorizar Política de Privacidad
+            Ver Política de Privacidad
           </button>
         </div>
       )}
 
-      {/* Top Navbar adhering to the Top Bar Contract */}
+      {/* Top Navbar */}
       <TopNavbar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
-        currentRole={currentRole}
-        onChangeRole={(newRole) => {
-          setCurrentRole(newRole);
-          if (newRole === 'transportista') setCurrentTab('transportistas');
-          else if (newRole === 'admin') setCurrentTab('admin');
-          else setCurrentTab('cotizador');
-        }}
+        currentRole={authUser?.role || 'cliente'}
         onOpenPrivacyModal={() => setIsPrivacyModalOpen(true)}
         onOpenTrackingModal={() => setIsTrackingModalOpen(true)}
+        authUser={authUser}
+        onOpenAuthModal={(role, mode) => openAuthWithConfig(role || 'cliente', mode || 'login')}
+        onLogout={handleLogout}
       />
 
       {/* Main App Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
-      {/* Auth Status + Role Helper Banner */}
+        {/* User Context & Exploration Status Banner */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-slate-600">
+          <div className="flex items-center gap-2.5 text-slate-600 flex-wrap">
             {authUser ? (
               <>
                 <span className="w-7 h-7 rounded-full bg-orange-100 border border-orange-200 text-orange-600 flex items-center justify-center shrink-0 font-bold text-xs">
                   {authUser.full_name.charAt(0).toUpperCase()}
                 </span>
                 <span className="font-semibold text-slate-900">{authUser.full_name}</span>
-                <span className="text-slate-400">|</span>
+                <span className="text-slate-300">|</span>
                 <span className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-bold uppercase font-mono text-[10px]">
-                  {currentRole}
+                  Rol Activo: {authUser.role}
                 </span>
                 {backendConnected && (
                   <span className="flex items-center gap-1 text-emerald-600 text-[10px]">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Backend conectado
+                    MongoDB Conectado
                   </span>
                 )}
               </>
             ) : (
               <>
-                <User className="w-4 h-4 text-slate-400" />
-                <span className="font-semibold text-slate-900">Vista Interactiva:</span>
-                <span>
-                  Rol:{' '}
-                  <strong className="text-orange-600 uppercase font-mono font-bold">
-                    {currentRole}
-                  </strong>
-                </span>
-                <span className="text-slate-400 hidden sm:inline">|</span>
-                <span className="text-slate-500 hidden sm:inline">
-                  {currentRole === 'cliente' && 'Cotiza mudanzas, compara tarifas por km, pisos y solicita servicios.'}
-                  {currentRole === 'transportista' && 'Gestiona tus órdenes activas, actualiza trayectos y revisa documentos.'}
-                  {currentRole === 'admin' && 'Modera transportistas, valida SOAT/RUT y resuelve disputas de clientes.'}
+                <div className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
+                  <Compass className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-semibold text-slate-900">Modo Explorador:</span>
+                <span className="text-slate-500">
+                  Puedes cotizar, probar rutas satelitales y explorar la flota. Para guardar mudanzas o acceder a portales privados, inicia sesión o crea tu cuenta.
                 </span>
               </>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            {currentRole === 'cliente' && (
-              <button
-                onClick={() => setCurrentTab(currentTab === 'mis_mudanzas' ? 'cotizador' : 'mis_mudanzas')}
-                className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                {currentTab === 'mis_mudanzas' ? '← Ir a Cotizador' : 'Ver Mis Mudanzas (' + orders.length + ')'}
-              </button>
+            {!authUser ? (
+              <>
+                <button
+                  onClick={() => openAuthWithConfig('cliente', 'login')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  Iniciar Sesión
+                </button>
+                <button
+                  onClick={() => openAuthWithConfig('cliente', 'register')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors shadow-xs"
+                >
+                  Registrarme
+                </button>
+              </>
+            ) : (
+              <>
+                {isClientLoggedIn && (
+                  <button
+                    onClick={() => setCurrentTab(currentTab === 'mis_mudanzas' ? 'cotizador' : 'mis_mudanzas')}
+                    className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    {currentTab === 'mis_mudanzas' ? '← Ir a Cotizador' : `Mis Mudanzas (${orders.length})`}
+                  </button>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Salir
+                </button>
+              </>
             )}
-
-            {/* Login button (show when not authenticated) */}
-            {!authUser && (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                Iniciar Sesión
-              </button>
-            )}
-
-            {/* Logout button (show when authenticated) */}
-            {authUser && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-600 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                Cerrar Sesión
-              </button>
-            )}
-
-            {/* Role toggle (always available for demo exploration) */}
-            <button
-              onClick={() => {
-                const nextRole = currentRole === 'cliente' ? 'transportista' : currentRole === 'transportista' ? 'admin' : 'cliente';
-                setCurrentRole(nextRole);
-                if (nextRole === 'transportista') setCurrentTab('transportistas');
-                else if (nextRole === 'admin') setCurrentTab('admin');
-                else setCurrentTab('cotizador');
-              }}
-              className="text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Cambiar Rol ⇄
-            </button>
           </div>
         </div>
 
+        {/* ===================== TAB ROUTER ===================== */}
 
-        {/* Tab Router based on role and selection */}
-        {currentRole === 'cliente' && (
-          <>
-            {currentTab === 'mis_mudanzas' ? (
-              <ClientMovesHistory
-                orders={orders}
-                onOpenTracking={(code) => {
-                  setActiveTrackingCode(code);
-                  setIsTrackingModalOpen(true);
-                }}
-              />
-            ) : currentTab === 'marketplace' ? (
-              <MarketplaceView
-                carriers={carriers}
-                onSelectCarrierForQuote={handleSelectCarrierForQuote}
-              />
-            ) : (
-              <div className="space-y-8">
-                {/* Hero section with value proposition */}
-                <HeroBanner
-                  onStartQuote={() => {
-                    const el = document.getElementById('cotizador-section');
-                    el?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  onExploreMarketplace={() => setCurrentTab('marketplace')}
-                  onOpenTracking={() => setIsTrackingModalOpen(true)}
-                />
+        {/* 1. ¿CÓMO FUNCIONA? (Public Exploration) */}
+        {currentTab === 'como_funciona' && (
+          <HowItWorksView
+            onStartQuote={() => setCurrentTab('cotizador')}
+            onExploreMarketplace={() => setCurrentTab('marketplace')}
+            onOpenAuthModal={(role, mode) => openAuthWithConfig(role || 'cliente', mode || 'login')}
+          />
+        )}
 
-                {/* Section Quote Wizard */}
-                <div id="cotizador-section" className="pt-2">
-                  <div className="text-center max-w-xl mx-auto mb-6">
-                    <h2 className="text-2xl font-bold font-display text-slate-900 tracking-tight">
-                      Cotizador Algorítmico Caribe Express
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Calcula tu tarifa exacta considerando distancia, características de inmueble, pisos, volumen en m³ y opciones de embalaje.
-                    </p>
-                  </div>
+        {/* 2. COTIZADOR INTELIGENTE (Public Exploration + Quote Generation) */}
+        {currentTab === 'cotizador' && (
+          <div className="space-y-8">
+            <HeroBanner
+              onStartQuote={() => {
+                const el = document.getElementById('cotizador-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              onExploreMarketplace={() => setCurrentTab('marketplace')}
+              onOpenTracking={() => setIsTrackingModalOpen(true)}
+            />
 
-                  <QuoteWizard
-                    carriers={carriers}
-                    onOrderCreated={handleOrderCreated}
-                    onOpenPrivacyModal={() => setIsPrivacyModalOpen(true)}
-                    hasAcceptedPrivacy={hasAcceptedPrivacy}
-                  />
-                </div>
+            <div id="cotizador-section" className="pt-2">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold font-display text-slate-900 tracking-tight">
+                  Cotizador Algorítmico Caribe Express
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Calcula tu tarifa exacta considerando distancia, características de inmueble, pisos, volumen en m³ y opciones de embalaje.
+                </p>
               </div>
-            )}
-          </>
+
+              <QuoteWizard
+                carriers={carriers}
+                onOrderCreated={handleOrderCreated}
+                onOpenPrivacyModal={() => setIsPrivacyModalOpen(true)}
+                hasAcceptedPrivacy={hasAcceptedPrivacy}
+              />
+            </div>
+          </div>
         )}
 
-        {currentRole === 'transportista' && (
-          <CarrierDashboard
-            carrier={carriers[0]}
-            orders={orders}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-            onUpdateCarrierRates={handleUpdateCarrierRates}
-          />
-        )}
-
-        {currentRole === 'admin' && (
-          <AdminPanel
+        {/* 3. MARKETPLACE DE FLOTA (Public Exploration) */}
+        {currentTab === 'marketplace' && (
+          <MarketplaceView
             carriers={carriers}
-            disputes={disputes}
-            orders={orders}
-            privacyLogs={privacyLogs}
-            onApproveDocument={handleApproveDocument}
-            onRejectDocument={handleRejectDocument}
-            onResolveDispute={handleResolveDispute}
+            onSelectCarrierForQuote={handleSelectCarrierForQuote}
           />
+        )}
+
+        {/* 4. PORTAL TRANSPORTISTA (PROTECTED: Requires Login as Transportista) */}
+        {currentTab === 'transportistas' && (
+          isCarrierLoggedIn ? (
+            <CarrierDashboard
+              carrier={carriers[0]}
+              orders={orders}
+              onUpdateOrderStatus={handleUpdateOrderStatus}
+              onUpdateCarrierRates={handleUpdateCarrierRates}
+            />
+          ) : (
+            <RoleGateScreen
+              requiredRole="transportista"
+              currentRole={authUser?.role}
+              onOpenAuthModal={(role, mode) => openAuthWithConfig(role, mode)}
+              onBackToCotizador={() => setCurrentTab('cotizador')}
+            />
+          )
+        )}
+
+        {/* 5. PANEL ADMINISTRATIVO (PROTECTED: Requires Login as Admin) */}
+        {currentTab === 'admin' && (
+          isAdminLoggedIn ? (
+            <AdminPanel
+              carriers={carriers}
+              disputes={disputes}
+              orders={orders}
+              privacyLogs={privacyLogs}
+              onApproveDocument={handleApproveDocument}
+              onRejectDocument={handleRejectDocument}
+              onResolveDispute={handleResolveDispute}
+            />
+          ) : (
+            <RoleGateScreen
+              requiredRole="admin"
+              currentRole={authUser?.role}
+              onOpenAuthModal={(role, mode) => openAuthWithConfig(role, mode)}
+              onBackToCotizador={() => setCurrentTab('cotizador')}
+            />
+          )
+        )}
+
+        {/* 6. MIS MUDANZAS (PROTECTED: Requires Login as Cliente) */}
+        {currentTab === 'mis_mudanzas' && (
+          isClientLoggedIn ? (
+            <ClientMovesHistory
+              orders={orders}
+              onOpenTracking={(code) => {
+                setActiveTrackingCode(code);
+                setIsTrackingModalOpen(true);
+              }}
+            />
+          ) : (
+            <RoleGateScreen
+              requiredRole="cliente"
+              currentRole={authUser?.role}
+              onOpenAuthModal={(role, mode) => openAuthWithConfig(role, mode)}
+              onBackToCotizador={() => setCurrentTab('cotizador')}
+            />
+          )
         )}
       </main>
 
@@ -478,7 +508,7 @@ export default function App() {
         isOpen={isPrivacyModalOpen}
         onClose={() => setIsPrivacyModalOpen(false)}
         onAccept={handleAcceptPrivacy}
-        currentRole={currentRole}
+        currentRole={authUser?.role || 'cliente'}
       />
 
       {/* Live Route Satellite Tracking Modal */}
@@ -495,7 +525,8 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
-        defaultRole={currentRole}
+        defaultRole={authModalRole}
+        initialMode={authModalMode}
       />
     </div>
   );

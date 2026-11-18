@@ -2,16 +2,24 @@ import { Carrier, MoveOrder, Dispute, PrivacyConsentRecord, QuoteDetails } from 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
-// Safe fetch wrapper with timeout
+// Safe fetch wrapper with timeout and automatic JWT bearer injection
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
+    // Retrieve JWT token if stored in session
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('caribe_token') : null;
+    const authHeaders: Record<string, string> = {};
+    if (token) {
+      authHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...(options?.headers || {}),
       },
       signal: controller.signal,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, User, Phone, ShieldCheck, Truck, LogIn, UserPlus, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -9,6 +9,7 @@ interface AuthModalProps {
   onClose: () => void;
   onLoginSuccess: (user: AuthUser, token: string) => void;
   defaultRole?: UserRole;
+  initialMode?: 'login' | 'register';
 }
 
 export interface AuthUser {
@@ -38,17 +39,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLoginSuccess,
   defaultRole = 'cliente',
+  initialMode = 'login',
 }) => {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>(defaultRole);
+  const [role, setRole] = useState<UserRole>(defaultRole === 'admin' ? 'cliente' : defaultRole);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      if (defaultRole === 'admin') {
+        if (initialMode === 'register') {
+          setRole('cliente');
+        } else {
+          setRole('admin');
+        }
+      } else {
+        setRole(defaultRole);
+      }
+      setError(null);
+      setSuccess(null);
+    }
+  }, [isOpen, defaultRole, initialMode]);
 
   if (!isOpen) return null;
 
@@ -65,6 +84,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else {
         if (!fullName.trim()) throw new Error('El nombre completo es requerido.');
         if (password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        if (role === 'admin') {
+          throw new Error('No está permitido registrar cuentas de administrador públicamente.');
+        }
         result = await apiAuth('/auth/register', {
           email,
           password,
@@ -74,7 +96,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
       }
 
-      // Persist token in sessionStorage (cleared on tab close)
+      // Persist token in sessionStorage
       sessionStorage.setItem('caribe_token', result.access_token);
       sessionStorage.setItem('caribe_user', JSON.stringify(result.user));
 
@@ -82,7 +104,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setTimeout(() => {
         onLoginSuccess(result.user, result.access_token);
         onClose();
-      }, 900);
+      }, 800);
     } catch (err: any) {
       setError(err.message || 'Error inesperado. Intenta de nuevo.');
     } finally {
@@ -116,7 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h2 className="text-base font-bold text-white">
                 {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
               </h2>
-              <p className="text-xs text-orange-100">Caribe Express · Plataforma MVP</p>
+              <p className="text-xs text-orange-100">Caribe Express · Acceso Seguro</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
@@ -124,19 +146,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
-        {/* Demo credentials pills */}
-        <div className="px-6 pt-4 pb-2">
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Acceso rápido de demostración</p>
+        {/* Demo credentials pills for quick testing */}
+        <div className="px-6 pt-4 pb-1">
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Acceso rápido con cuentas pre-configuradas</p>
           <div className="flex gap-2 flex-wrap">
-            {(['cliente', 'transportista', 'admin'] as UserRole[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => fillDemo(r)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors capitalize bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700"
-              >
-                {r === 'cliente' ? '👤 Cliente' : r === 'transportista' ? '🚛 Transportista' : '🛡️ Admin'}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => fillDemo('cliente')}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700"
+            >
+              👤 Cliente Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemo('transportista')}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700"
+            >
+              🚛 Transportista Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemo('admin')}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700"
+            >
+              🛡️ Admin Demo
+            </button>
           </div>
         </div>
 
@@ -155,7 +189,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { setMode('register'); setError(null); }}
+              onClick={() => {
+                setMode('register');
+                if (role === 'admin') setRole('cliente');
+                setError(null);
+              }}
               className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${mode === 'register' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <UserPlus className="w-3.5 h-3.5 inline mr-1.5" />
@@ -189,32 +227,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+57 300 000 0000"
+                    placeholder="+57 300 123 4567"
                     className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                 </div>
               </div>
 
-              {/* Role selector */}
+              {/* Public Role selector: STRICTLY ONLY Cliente and Transportista */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Cuenta *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { val: 'cliente' as UserRole, label: 'Cliente', icon: '👤', desc: 'Cotizar mudanzas' },
-                    { val: 'transportista' as UserRole, label: 'Transportista', icon: '🚛', desc: 'Prestar servicio' },
-                    { val: 'admin' as UserRole, label: 'Admin', icon: '🛡️', desc: 'Gestionar plataforma' },
-                  ]).map(({ val, label, icon, desc }) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setRole(val)}
-                      className={`p-2.5 rounded-xl border-2 text-center transition-all ${role === val ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:border-slate-300'}`}
-                    >
-                      <span className="text-lg block">{icon}</span>
-                      <span className="text-[10px] font-bold text-slate-700 block">{label}</span>
-                      <span className="text-[9px] text-slate-400">{desc}</span>
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Tipo de Cuenta *</label>
+                  <span className="text-[10px] text-slate-400">Admin gestionado por DB</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRole('cliente')}
+                    className={`p-3 rounded-xl border-2 text-center transition-all ${
+                      role === 'cliente'
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-xl block mb-1">👤</span>
+                    <span className="text-xs font-bold text-slate-800 block">Cliente</span>
+                    <span className="text-[10px] text-slate-500">Cotizar y solicitar mudanzas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRole('transportista')}
+                    className={`p-3 rounded-xl border-2 text-center transition-all ${
+                      role === 'transportista'
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-xl block mb-1">🚛</span>
+                    <span className="text-xs font-bold text-slate-800 block">Transportista</span>
+                    <span className="text-[10px] text-slate-500">Prestar servicios y gestionar flota</span>
+                  </button>
                 </div>
               </div>
             </>
@@ -296,11 +348,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="px-6 pb-4 text-center">
           <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1">
             <ShieldCheck className="w-3 h-3 text-green-500" />
-            Protegido por cifrado TLS · Ley 1581 de 2012 (Colombia) / GDPR
+            Protegido con JWT y TLS · Ley 1581 de 2012 (Habeas Data)
           </p>
         </div>
       </div>
     </div>
   );
 };
-

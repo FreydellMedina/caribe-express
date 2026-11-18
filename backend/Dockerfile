@@ -1,4 +1,4 @@
-# Dockerfile para FastAPI Backend - Caribe Express
+# Dockerfile para FastAPI Backend - Caribe Express (Exclusivo MongoDB)
 FROM python:3.11-slim
 
 # Evitar escritura de bytecode y habilitar buffer de logs
@@ -7,10 +7,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para psycopg2 y redes
+# Instalar dependencias del sistema mínimas (curl para healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,4 +28,3 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 
 # Comando de inicio del servidor ASGI
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

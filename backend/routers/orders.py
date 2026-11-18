@@ -1,10 +1,10 @@
 import random
+import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from backend.database import get_db
-from backend.models import MoveOrder, OrderTimeline, CarrierProfile, User
+from backend.mongodb import serialize_mongo_doc
 from backend.schemas import (
     OrderCreate,
     OrderStatusUpdate,
@@ -13,8 +13,9 @@ from backend.schemas import (
 )
 from backend.routers.quotes import calculate_quote
 from backend.security import get_current_user
+from backend.models import User
 
-router = APIRouter(prefix="/orders", tags=["Órdenes y Mudanzas"])
+router = APIRouter(prefix="/orders", tags=["Órdenes y Mudanzas (MongoDB)"])
 
 STATUS_DESCRIPTIONS = {
     "cotizado": ("Cotización Registrada", "Reserva preliminar generada en plataforma Caribe Express."),
@@ -27,63 +28,64 @@ STATUS_DESCRIPTIONS = {
     "cancelado": ("Servicio Cancelado", "Cancelación administrativa de la orden."),
 }
 
-def format_order_response(ord: MoveOrder) -> dict:
+def format_order_response(ord: Dict[str, Any]) -> dict:
+    raw_timeline = ord.get("timeline", []) or []
     timeline_items = [
         TimelineEventSchema(
-            status=t.status,
-            timestamp=t.timestamp_desc,
-            title=t.title,
-            description=t.description
+            status=t.get("status", "cotizado"),
+            timestamp=t.get("timestamp") or t.get("timestamp_desc") or "",
+            title=t.get("title", ""),
+            description=t.get("description", "")
         )
-        for t in ord.timeline
+        for t in raw_timeline
     ]
     return {
-        "id": ord.id,
-        "trackingCode": ord.tracking_code,
-        "clientName": ord.client_name,
-        "clientPhone": ord.client_phone,
-        "carrierName": ord.carrier_name,
-        "carrierPhone": ord.carrier_phone,
-        "carrierVehiclePlate": ord.carrier_vehicle_plate,
-        "status": ord.status,
-        "originCity": ord.origin_city,
-        "originAddress": ord.origin_address,
-        "destCity": ord.dest_city,
-        "destAddress": ord.dest_address,
-        "propertyType": ord.property_type,
-        "distanceKm": ord.distance_km,
-        "estimatedMinutes": ord.estimated_minutes,
-        "totalPrice": ord.total_price,
-        "scheduledDate": ord.scheduled_date,
-        "scheduledTime": ord.scheduled_time,
-        "notes": ord.notes,
+        "id": str(ord.get("id") or ord.get("_id") or ""),
+        "trackingCode": ord.get("tracking_code") or ord.get("trackingCode") or "",
+        "clientName": ord.get("client_name") or ord.get("clientName") or "",
+        "clientPhone": ord.get("client_phone") or ord.get("clientPhone") or "",
+        "carrierName": ord.get("carrier_name") or ord.get("carrierName"),
+        "carrierPhone": ord.get("carrier_phone") or ord.get("carrierPhone"),
+        "carrierVehiclePlate": ord.get("carrier_vehicle_plate") or ord.get("carrierVehiclePlate"),
+        "status": ord.get("status", "cotizado"),
+        "originCity": ord.get("origin_city") or ord.get("originCity") or "",
+        "originAddress": ord.get("origin_address") or ord.get("originAddress") or "",
+        "destCity": ord.get("dest_city") or ord.get("destCity") or "",
+        "destAddress": ord.get("dest_address") or ord.get("destAddress") or "",
+        "propertyType": ord.get("property_type") or ord.get("propertyType") or "apartamento",
+        "distanceKm": float(ord.get("distance_km") or ord.get("distanceKm") or 0.0),
+        "estimatedMinutes": int(ord.get("estimated_minutes") or ord.get("estimatedMinutes") or 0),
+        "totalPrice": float(ord.get("total_price") or ord.get("totalPrice") or 0.0),
+        "scheduledDate": ord.get("scheduled_date") or ord.get("scheduledDate"),
+        "scheduledTime": ord.get("scheduled_time") or ord.get("scheduledTime"),
+        "notes": ord.get("notes"),
         "timeline": timeline_items,
-        "rating": ord.rating,
-        "clientReview": ord.client_review
+        "createdAt": ord.get("created_at") or ord.get("createdAt") or datetime.utcnow().isoformat()
     }
 
 @router.get("", response_model=List[OrderResponse])
 def list_orders(
-    role: Optional[str] = None,
-    userId: Optional[str] = None,
-    carrierId: Optional[str] = None,
-    db: Session = Depends(get_db)
+    status: Optional[str] = None,
+    clientEmail: Optional[str] = None,
+    db = Depends(get_db)
 ):
-    query = db.query(MoveOrder)
-    if carrierId:
-        query = query.filter(MoveOrder.carrier_id == carrierId)
-    if userId:
-        query = query.filter(MoveOrder.client_id == userId)
-    
-    orders = query.order_by(MoveOrder.created_at.desc()).all()
+    query: Dict[str, Any] = {}
+    if status:
+        query["status"] = status
+    cursor = db.move_orders.find(query).sort("created_at", -1)
+    orders = list(cursor)
     return [format_order_response(o) for o in orders]
 
 @router.get("/{tracking_code}", response_model=OrderResponse)
-def get_order_by_tracking(tracking_code: str, db: Session = Depends(get_db)):
-    ord = db.query(MoveOrder).filter(MoveOrder.tracking_code == tracking_code.upper()).first()
-    if not ord:
-        # Also try by id
-        ord = db.query(MoveOrder).filter(MoveOrder.id == tracking_code).first()
+def get_order_by_tracking_code(tracking_code: str, db = Depends(get_db)):
+    ord = db.move_orders.find_one({
+        "$or": [
+            {"tracking_code": tracking_code},
+            {"trackingCode": tracking_code},
+            {"id": tracking_code},
+            {"_id": tracking_code}
+        ]
+    })
     if not ord:
         raise HTTPException(status_code=404, detail="Orden de mudanza no encontrada")
     return format_order_response(ord)
@@ -91,115 +93,99 @@ def get_order_by_tracking(tracking_code: str, db: Session = Depends(get_db)):
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(
     payload: OrderCreate,
-    db: Session = Depends(get_db),
+    db = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user)
 ):
-    # Calculate quote
-    calc = calculate_quote(payload.quote, db)
-    carrier = db.query(CarrierProfile).filter(CarrierProfile.id == payload.carrierId).first()
+    tracking_code = f"CRB-{random.randint(10000, 99999)}"
+    carrier_name = None
+    carrier_phone = None
+    carrier_plate = None
 
-    # Generate tracking code like CRB-XXXXX
-    code = f"CRB-{random.randint(10000, 99999)}"
+    if payload.carrierId:
+        carrier = db.carrier_profiles.find_one({"$or": [{"id": payload.carrierId}, {"_id": payload.carrierId}]})
+        if carrier:
+            carrier_name = carrier.get("company_name") or carrier.get("companyName")
+            carrier_phone = carrier.get("phone")
+            carrier_plate = carrier.get("vehicle_plate") or carrier.get("vehiclePlate")
 
-    new_order = MoveOrder(
-        tracking_code=code,
-        client_id=current_user.id if current_user else None,
-        client_name=payload.clientName,
-        client_phone=payload.clientPhone,
-        carrier_id=carrier.id if carrier else None,
-        carrier_name=carrier.company_name if carrier else "Transportador Asignado",
-        carrier_phone=carrier.phone if carrier else "+57 300 123 4567",
-        carrier_vehicle_plate=carrier.vehicle_plate if carrier else "CRB-001",
-        status="asignado",
-        origin_address=payload.quote.originAddress,
-        origin_city=payload.quote.originCity,
-        origin_floor=payload.quote.originFloor,
-        origin_elevator=payload.quote.originElevator,
-        dest_address=payload.quote.destAddress,
-        dest_city=payload.quote.destCity,
-        dest_floor=payload.quote.destFloor,
-        dest_elevator=payload.quote.destElevator,
-        property_type=payload.quote.propertyType,
-        suggested_vehicle=calc.suggestedVehicle,
-        distance_km=calc.distanceKm,
-        estimated_minutes=calc.estimatedMinutes,
-        toll_count=calc.tollCount,
-        base_rate=calc.breakdown.baseRate,
-        distance_cost=calc.breakdown.distanceCost,
-        stair_surcharge=calc.breakdown.stairSurcharge,
-        helpers_cost=calc.breakdown.helpersCost,
-        packing_cost=calc.breakdown.packingCost,
-        insurance_cost=calc.breakdown.insuranceCost,
-        total_price=calc.breakdown.total,
-        scheduled_date=payload.scheduledDate,
-        scheduled_time=payload.scheduledTime,
-        notes=payload.notes
-    )
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
+    init_title, init_desc = STATUS_DESCRIPTIONS["cotizado"]
+    now_str = datetime.utcnow().strftime("%d %b, %I:%M %p")
+    new_id = f"ord-{uuid.uuid4().hex[:6]}"
 
-    # Initial timeline entries
-    t1 = OrderTimeline(
-        order_id=new_order.id,
-        status="cotizado",
-        timestamp_desc="Hoy, " + datetime.now().strftime("%I:%M %p"),
-        title="Cotización Generada",
-        description=f"Cotización calculada para ruta {payload.quote.originCity} a {payload.quote.destCity}."
-    )
-    t2 = OrderTimeline(
-        order_id=new_order.id,
-        status="asignado",
-        timestamp_desc="Hoy, " + datetime.now().strftime("%I:%M %p"),
-        title="Servicio Aceptado",
-        description=f"Transportista {new_order.carrier_name} confirmado con vehículo {new_order.carrier_vehicle_plate}."
-    )
-    db.add_all([t1, t2])
-    db.commit()
-    db.refresh(new_order)
+    order_doc = {
+        "_id": new_id,
+        "id": new_id,
+        "tracking_code": tracking_code,
+        "client_id": current_user.id if current_user else None,
+        "client_name": payload.clientName,
+        "client_phone": payload.clientPhone,
+        "carrier_id": payload.carrierId,
+        "carrier_name": carrier_name,
+        "carrier_phone": carrier_phone,
+        "carrier_vehicle_plate": carrier_plate,
+        "origin_city": payload.originCity,
+        "origin_address": payload.originAddress,
+        "origin_floor": payload.originFloor,
+        "origin_elevator": payload.originElevator,
+        "dest_city": payload.destCity,
+        "dest_address": payload.destAddress,
+        "dest_floor": payload.destFloor,
+        "dest_elevator": payload.destElevator,
+        "property_type": payload.propertyType,
+        "distance_km": payload.distanceKm,
+        "estimated_minutes": payload.estimatedMinutes,
+        "total_volume_m3": 12.0,
+        "helpers_count": payload.helpersCount,
+        "total_price": payload.totalPrice,
+        "status": "cotizado",
+        "scheduled_date": payload.scheduledDate,
+        "scheduled_time": payload.scheduledTime,
+        "notes": payload.notes,
+        "created_at": datetime.utcnow().isoformat(),
+        "timeline": [
+            {
+                "status": "cotizado",
+                "timestamp": now_str,
+                "title": init_title,
+                "description": init_desc
+            }
+        ]
+    }
 
-    return format_order_response(new_order)
+    db.move_orders.insert_one(order_doc)
+    return format_order_response(order_doc)
 
 @router.patch("/{order_id}/status", response_model=OrderResponse)
 def update_order_status(
     order_id: str,
-    update: OrderStatusUpdate,
-    db: Session = Depends(get_db)
+    payload: OrderStatusUpdate,
+    db = Depends(get_db)
 ):
-    order = db.query(MoveOrder).filter(MoveOrder.id == order_id).first()
-    if not order:
+    ord = db.move_orders.find_one({"$or": [{"id": order_id}, {"_id": order_id}, {"tracking_code": order_id}]})
+    if not ord:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    
-    order.status = update.status
-    if update.currentLat:
-        order.current_lat = update.currentLat
-    if update.currentLng:
-        order.current_lng = update.currentLng
-    if update.locationDesc:
-        order.current_location_desc = update.locationDesc
-    
-    # If completed, add earnings to carrier
-    if update.status == "completado" and order.carrier_id:
-        carrier = db.query(CarrierProfile).filter(CarrierProfile.id == order.carrier_id).first()
-        if carrier:
-            carrier.total_earnings = (carrier.total_earnings or 0) + (order.total_price * 0.85) # 85% to driver
-            carrier.total_trips = (carrier.total_trips or 0) + 1
 
-    # Add timeline event
-    title, desc = STATUS_DESCRIPTIONS.get(
-        update.status,
-        ("Estado Actualizado", update.notes or "Actualización de ruta.")
+    status_key = payload.status
+    title, desc = STATUS_DESCRIPTIONS.get(status_key, ("Estado Actualizado", "El servicio ha cambiado de estado."))
+    if payload.notes:
+        desc = payload.notes
+
+    now_str = datetime.utcnow().strftime("%d %b, %I:%M %p")
+    new_event = {
+        "status": status_key,
+        "timestamp": now_str,
+        "title": title,
+        "description": desc
+    }
+
+    timeline = ord.get("timeline", []) or []
+    timeline.append(new_event)
+
+    db.move_orders.update_one(
+        {"$or": [{"id": order_id}, {"_id": order_id}, {"tracking_code": order_id}]},
+        {"$set": {"status": status_key, "timeline": timeline}}
     )
-    t = OrderTimeline(
-        order_id=order.id,
-        status=update.status,
-        timestamp_desc="Hoy, " + datetime.now().strftime("%I:%M %p"),
-        title=title,
-        description=update.notes or desc
-    )
-    db.add(t)
-    db.commit()
-    db.refresh(order)
 
-    return format_order_response(order)
-
+    ord["status"] = status_key
+    ord["timeline"] = timeline
+    return format_order_response(ord)

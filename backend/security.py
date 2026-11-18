@@ -7,9 +7,9 @@ from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.database import get_db
+from backend.mongodb import serialize_mongo_doc
 from backend.models import User
 
 import bcrypt
@@ -39,13 +39,31 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token(data: dict) -> str:
+    """Creates long-lived refresh token for Flutter and mobile apps."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+def verify_refresh_token(token: str) -> Optional[dict]:
+    """Verifies refresh token and ensures token type matches."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "refresh":
+            return None
+        return payload
+    except JWTError:
+        return None
+
 def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ) -> Optional[User]:
     if not token:
         return None
@@ -56,8 +74,11 @@ def get_current_user(
             return None
     except JWTError:
         return None
-    user = db.query(User).filter(User.id == user_id).first()
-    return user
+    
+    user_doc = db.users.find_one({"$or": [{"id": user_id}, {"_id": user_id}]})
+    if not user_doc:
+        return None
+    return User(**serialize_mongo_doc(user_doc))
 
 def require_role(allowed_roles: List[str]):
     def role_checker(current_user: Optional[User] = Depends(get_current_user)):

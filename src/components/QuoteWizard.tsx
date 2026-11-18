@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   MapPin,
   Building,
@@ -14,11 +14,14 @@ import {
   DollarSign,
   PackageCheck,
   Sparkles,
-  Info
+  Info,
+  Navigation,
+  Radio
 } from 'lucide-react';
 import { CARIBE_CITIES, INVENTORY_CATALOG, calculateDistanceAndCost } from '../data/mockData';
 import { PropertyType, VehicleType, InventoryItem, Carrier, MoveOrder } from '../types';
 import { RouteMapVisualizer } from './RouteMapVisualizer';
+import { useGeolocation } from '../services/useGeolocation';
 
 interface QuoteWizardProps {
   carriers: Carrier[];
@@ -37,8 +40,31 @@ export const QuoteWizard: React.FC<QuoteWizardProps> = ({
   const destCityId = useId();
   const originFloorId = useId();
   const destFloorId = useId();
+
   // Wizard steps: 1. Rutas e Inmuebles, 2. Inventario & Volumen, 3. Transportista & Desglose, 4. Confirmación
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  // Geolocation hook for automatic origin detection
+  const {
+    hasPermission,
+    isLocating,
+    latitude,
+    longitude,
+    accuracy,
+    nearestCity,
+    error: geoError,
+    requestLocation,
+  } = useGeolocation();
+
+  // Auto-populate origin with detected city if user requests location
+  React.useEffect(() => {
+    if (nearestCity && hasPermission) {
+      setOriginCity(nearestCity);
+      if (latitude && longitude) {
+        setOriginAddress(`Ubicación GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+      }
+    }
+  }, [nearestCity, hasPermission, latitude, longitude]);
 
   // Step 1: Locations & Property
   const [originCity, setOriginCity] = useState('Barranquilla');
@@ -281,15 +307,35 @@ export const QuoteWizard: React.FC<QuoteWizardProps> = ({
             <div className="space-y-4">
               {/* Origin */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />
                     Punto de Carga (Origen)
                   </span>
-                  <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-                    Costa Caribe
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {hasPermission && nearestCity && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
+                        GPS detectado: {nearestCity} (±{accuracy}m)
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={requestLocation}
+                      disabled={isLocating}
+                      className="text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                      title="Solicitar permiso al navegador para detectar ciudad más cercana"
+                    >
+                      <Navigation className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
+                      {isLocating ? 'Detectando GPS...' : '📍 Usar mi ubicación'}
+                    </button>
+                  </div>
                 </div>
+                {geoError && (
+                  <p className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                    ⚠️ {geoError}
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label htmlFor={originCityId} className="block text-[11px] font-medium text-slate-600 mb-1">Ciudad</label>

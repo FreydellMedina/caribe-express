@@ -171,6 +171,41 @@ class TestAuthentication:
         })
         assert r.status_code == 201
         assert r.json()["user"]["role"] == "transportista"
+        assert "refresh_token" in r.json()
+
+    def test_refresh_token_flow_for_mobile_flutter(self):
+        """El endpoint /auth/refresh debe emitir nuevos tokens válidos."""
+        login_r = client.post("/api/v1/auth/login", json={
+            "email": "cliente@caribeexpress.co",
+            "password": "Cliente2026!"
+        })
+        assert login_r.status_code == 200
+        data = login_r.json()
+        assert "refresh_token" in data
+        refresh_token = data["refresh_token"]
+
+        # Solicitar renovación
+        r = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+        assert r.status_code == 200
+        refreshed_data = r.json()
+        assert "access_token" in refreshed_data
+        assert "refresh_token" in refreshed_data
+        assert refreshed_data["user"]["email"] == "cliente@caribeexpress.co"
+
+    def test_update_profile_endpoint(self):
+        """El endpoint /auth/profile permite actualizar datos del usuario autenticado."""
+        login_r = client.post("/api/v1/auth/login", json={
+            "email": "cliente@caribeexpress.co",
+            "password": "Cliente2026!"
+        })
+        token = login_r.json()["access_token"]
+        r = client.put(
+            "/api/v1/auth/profile",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"full_name": "María Alejandra Restrepo Actualizada", "phone": "+57 301 849 9999"}
+        )
+        assert r.status_code == 200
+        assert r.json()["full_name"] == "María Alejandra Restrepo Actualizada"
 
 
 # ─────────────────────────────────────────────────────────────
