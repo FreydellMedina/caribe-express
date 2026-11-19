@@ -186,7 +186,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl mx-auto">
           {/* Cliente card */}
           <div className="bg-slate-800/80 rounded-2xl p-5 border border-slate-700 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
@@ -227,36 +227,6 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 Registrarme como Transportista
-              </button>
-            </div>
-          </div>
-
-          {/* Admin card */}
-          <div className="bg-slate-800/80 rounded-2xl p-5 border border-slate-700 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-xl">
-                🛡️
-              </div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-white">Administrador</h4>
-                <span className="text-[9px] bg-purple-500/20 text-purple-300 font-bold px-1.5 py-0.5 rounded border border-purple-500/30">
-                  Backend / DB
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Supervisa toda la plataforma, audita y valida documentos de vehículos, resuelve disputas entre partes y audita los registros de consentimiento Habeas Data.
-              </p>
-              <p className="text-[11px] text-amber-300/90 bg-amber-950/40 border border-amber-800/40 p-2 rounded-lg">
-                ℹ️ Por seguridad, las cuentas admin no se registran en la web; son administradas directamente desde el backend.
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={() => onOpenAuthModal('admin', 'login')}
-                className="w-full py-2 px-3 text-xs font-bold bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-colors flex items-center justify-center gap-1.5"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                Iniciar Sesión como Admin
               </button>
             </div>
           </div>

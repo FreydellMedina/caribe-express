@@ -16,6 +16,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { ClientMovesHistory } from './components/ClientMovesHistory';
 import { HowItWorksView } from './components/HowItWorksView';
 import { RoleGateScreen } from './components/RoleGateScreen';
+import { PredictiveModelView } from './components/PredictiveModelView';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { TrackingModal } from './components/TrackingModal';
 import { AuthModal, AuthUser } from './components/AuthModal';
@@ -315,77 +316,6 @@ export default function App() {
 
       {/* Main App Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
-        {/* User Context & Exploration Status Banner */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 flex-wrap">
-            {authUser ? (
-              <>
-                <span className="w-7 h-7 rounded-full bg-orange-100 border border-orange-200 text-orange-600 flex items-center justify-center shrink-0 font-bold text-xs">
-                  {authUser.full_name.charAt(0).toUpperCase()}
-                </span>
-                <span className="font-semibold text-slate-900">{authUser.full_name}</span>
-                <span className="text-slate-300">|</span>
-                <span className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-bold uppercase font-mono text-[10px]">
-                  Rol Activo: {authUser.role}
-                </span>
-                {backendConnected && (
-                  <span className="flex items-center gap-1 text-emerald-600 text-[10px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    MongoDB Conectado
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
-                  <Compass className="w-3.5 h-3.5" />
-                </div>
-                <span className="font-semibold text-slate-900">Modo Explorador:</span>
-                <span className="text-slate-500">
-                  Puedes cotizar, probar rutas satelitales y explorar la flota. Para guardar mudanzas o acceder a portales privados, inicia sesión o crea tu cuenta.
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {!authUser ? (
-              <>
-                <button
-                  onClick={() => openAuthWithConfig('cliente', 'login')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  Iniciar Sesión
-                </button>
-                <button
-                  onClick={() => openAuthWithConfig('cliente', 'register')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors shadow-xs"
-                >
-                  Registrarme
-                </button>
-              </>
-            ) : (
-              <>
-                {isClientLoggedIn && (
-                  <button
-                    onClick={() => setCurrentTab(currentTab === 'mis_mudanzas' ? 'cotizador' : 'mis_mudanzas')}
-                    className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    {currentTab === 'mis_mudanzas' ? '← Ir a Cotizador' : `Mis Mudanzas (${orders.length})`}
-                  </button>
-                )}
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Salir
-                </button>
-              </>
-            )}
-          </div>
-        </div>
 
         {/* ===================== TAB ROUTER ===================== */}
 
@@ -436,6 +366,11 @@ export default function App() {
             carriers={carriers}
             onSelectCarrierForQuote={handleSelectCarrierForQuote}
           />
+        )}
+
+        {/* 3b. MODELO PREDICTIVO J48 (Public) */}
+        {currentTab === 'predictivo' && (
+          <PredictiveModelView />
         )}
 
         {/* 4. PORTAL TRANSPORTISTA (PROTECTED: Requires Login as Transportista) */}

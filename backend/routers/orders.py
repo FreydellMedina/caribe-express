@@ -112,6 +112,17 @@ def create_order(
     now_str = datetime.utcnow().strftime("%d %b, %I:%M %p")
     new_id = f"ord-{uuid.uuid4().hex[:6]}"
 
+    q = payload.quote
+    orig_city = payload.originCity or (q.originCity if q else "Barranquilla")
+    orig_addr = payload.originAddress or (q.originAddress if q else "")
+    orig_floor = payload.originFloor if payload.originFloor is not None else (q.originFloor if q else 1)
+    orig_elev = payload.originElevator if payload.originElevator is not None else (q.originElevator if q else True)
+    dst_city = payload.destCity or (q.destCity if q else "Cartagena")
+    dst_addr = payload.destAddress or (q.destAddress if q else "")
+    dst_floor = payload.destFloor if payload.destFloor is not None else (q.destFloor if q else 1)
+    dst_elev = payload.destElevator if payload.destElevator is not None else (q.destElevator if q else True)
+    prop_type = payload.propertyType or (q.propertyType if q else "apartamento")
+
     order_doc = {
         "_id": new_id,
         "id": new_id,
@@ -123,20 +134,20 @@ def create_order(
         "carrier_name": carrier_name,
         "carrier_phone": carrier_phone,
         "carrier_vehicle_plate": carrier_plate,
-        "origin_city": payload.originCity,
-        "origin_address": payload.originAddress,
-        "origin_floor": payload.originFloor,
-        "origin_elevator": payload.originElevator,
-        "dest_city": payload.destCity,
-        "dest_address": payload.destAddress,
-        "dest_floor": payload.destFloor,
-        "dest_elevator": payload.destElevator,
-        "property_type": payload.propertyType,
-        "distance_km": payload.distanceKm,
-        "estimated_minutes": payload.estimatedMinutes,
+        "origin_city": orig_city,
+        "origin_address": orig_addr,
+        "origin_floor": orig_floor,
+        "origin_elevator": orig_elev,
+        "dest_city": dst_city,
+        "dest_address": dst_addr,
+        "dest_floor": dst_floor,
+        "dest_elevator": dst_elev,
+        "property_type": prop_type,
+        "distance_km": payload.distanceKm or 0.0,
+        "estimated_minutes": payload.estimatedMinutes or 0,
         "total_volume_m3": 12.0,
-        "helpers_count": payload.helpersCount,
-        "total_price": payload.totalPrice,
+        "helpers_count": payload.helpersCount or 1,
+        "total_price": payload.totalPrice or 0.0,
         "status": "cotizado",
         "scheduled_date": payload.scheduledDate,
         "scheduled_time": payload.scheduledTime,

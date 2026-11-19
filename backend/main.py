@@ -17,6 +17,7 @@ from backend.routers import (
     disputes,
     privacy,
     maps,
+    predictions,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +71,7 @@ app.include_router(orders.router, prefix=settings.API_V1_STR)
 app.include_router(disputes.router, prefix=settings.API_V1_STR)
 app.include_router(privacy.router, prefix=settings.API_V1_STR)
 app.include_router(maps.router, prefix=settings.API_V1_STR)
+app.include_router(predictions.router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
@@ -84,8 +86,17 @@ def root():
     }
 
 @app.get("/health")
-@app.get("/api/v1/health")
 def health_check():
+    return {
+        "status": "healthy",
+        "database": "mongodb (localhost:27017)",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT
+    }
+
+# Alias for Vite proxy: /api/v1/health → backend /api/v1/health
+@app.get("/api/v1/health")
+def health_check_v1():
     return {
         "status": "healthy",
         "database": "mongodb (localhost:27017)",

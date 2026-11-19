@@ -153,12 +153,25 @@ class TimelineEventSchema(BaseModel):
     description: str
 
 class OrderCreate(BaseModel):
-    carrierId: str
+    carrierId: Optional[str] = None
     clientName: str
     clientPhone: str
-    scheduledDate: str
-    scheduledTime: str
-    quote: QuoteRequest
+    scheduledDate: Optional[str] = None
+    scheduledTime: Optional[str] = None
+    quote: Optional[QuoteRequest] = None
+    originCity: Optional[str] = "Barranquilla"
+    originAddress: Optional[str] = ""
+    originFloor: Optional[int] = 1
+    originElevator: Optional[bool] = True
+    destCity: Optional[str] = "Cartagena"
+    destAddress: Optional[str] = ""
+    destFloor: Optional[int] = 1
+    destElevator: Optional[bool] = True
+    propertyType: Optional[str] = "apartamento"
+    distanceKm: Optional[float] = 0.0
+    estimatedMinutes: Optional[int] = 0
+    helpersCount: Optional[int] = 1
+    totalPrice: Optional[float] = 0.0
     notes: Optional[str] = None
 
 class OrderStatusUpdate(BaseModel):

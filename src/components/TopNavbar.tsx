@@ -2,7 +2,7 @@ import React from 'react';
 import { BrandLogo } from './BrandLogo';
 import { UserRole } from '../types';
 import { AuthUser } from './AuthModal';
-import { ShieldCheck, Truck, User, Search, LogIn, LogOut, Lock, HelpCircle, UserPlus } from 'lucide-react';
+import { ShieldCheck, Truck, Search, LogIn, LogOut, HelpCircle, UserPlus, Brain } from 'lucide-react';
 
 interface TopNavbarProps {
   currentTab: string;
@@ -76,39 +76,48 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             Marketplace de Flota
           </button>
 
-          {/* Protected Tab: Portal Transportista */}
+          {/* Pestaña pública: Modelo Predictivo */}
           <button
-            onClick={() => onSelectTab('transportistas')}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 hover:text-slate-900 ${
-              currentTab === 'transportistas'
-                ? 'text-orange-600 bg-orange-50 font-bold'
-                : 'text-slate-600'
-            }`}
-          >
-            <span>Portal Transportista</span>
-            {!isCarrierLoggedIn && (
-              <span title="Requiere inicio de sesión como transportista">
-                <Lock className="w-3 h-3 text-slate-400" />
-              </span>
-            )}
-          </button>
-
-          {/* Protected Tab: Panel Administrativo */}
-          <button
-            onClick={() => onSelectTab('admin')}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 hover:text-slate-900 ${
-              currentTab === 'admin'
+            onClick={() => onSelectTab('predictivo')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 hover:text-slate-900 ${
+              currentTab === 'predictivo'
                 ? 'text-purple-600 bg-purple-50 font-bold'
                 : 'text-slate-600'
             }`}
           >
-            <span>Panel Admin</span>
-            {!isAdminLoggedIn && (
-              <span title="Acceso exclusivo administradores (gestión DB/backend)">
-                <Lock className="w-3 h-3 text-slate-400" />
-              </span>
-            )}
+            <Brain className="w-3.5 h-3.5 text-purple-500" />
+            Modelo Predictivo
           </button>
+
+          {/* Protected Tab: Portal Transportista — solo visible cuando el transportista está autenticado */}
+          {isCarrierLoggedIn && (
+            <button
+              onClick={() => onSelectTab('transportistas')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 hover:text-slate-900 ${
+                currentTab === 'transportistas'
+                  ? 'text-orange-600 bg-orange-50 font-bold'
+                  : 'text-slate-600'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5 text-orange-500" />
+              Portal Transportista
+            </button>
+          )}
+
+          {/* Protected Tab: Panel Administrativo — solo visible cuando el admin está autenticado */}
+          {isAdminLoggedIn && (
+            <button
+              onClick={() => onSelectTab('admin')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 hover:text-slate-900 ${
+                currentTab === 'admin'
+                  ? 'text-purple-600 bg-purple-50 font-bold'
+                  : 'text-slate-600'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+              Panel Admin
+            </button>
+          )}
 
           {/* Client Moves tab if logged in as client */}
           {isClientLoggedIn && (
@@ -217,23 +226,35 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           Flota
         </button>
         <button
-          onClick={() => onSelectTab('transportistas')}
+          onClick={() => onSelectTab('predictivo')}
           className={`px-3 py-1 rounded-lg shrink-0 font-medium flex items-center gap-1 ${
-            currentTab === 'transportistas' ? 'bg-orange-500 text-white font-bold' : 'text-slate-600'
+            currentTab === 'predictivo' ? 'bg-purple-600 text-white font-bold' : 'text-slate-600'
           }`}
         >
-          Transportista
-          {!isCarrierLoggedIn && <Lock className="w-2.5 h-2.5" />}
+          🧠 Modelo Predictivo
         </button>
-        <button
-          onClick={() => onSelectTab('admin')}
-          className={`px-3 py-1 rounded-lg shrink-0 font-medium flex items-center gap-1 ${
-            currentTab === 'admin' ? 'bg-purple-600 text-white font-bold' : 'text-slate-600'
-          }`}
-        >
-          Admin
-          {!isAdminLoggedIn && <Lock className="w-2.5 h-2.5" />}
-        </button>
+        {/* Mobile: Portal Transportista — solo si está autenticado como transportista */}
+        {isCarrierLoggedIn && (
+          <button
+            onClick={() => onSelectTab('transportistas')}
+            className={`px-3 py-1 rounded-lg shrink-0 font-medium flex items-center gap-1 ${
+              currentTab === 'transportistas' ? 'bg-orange-500 text-white font-bold' : 'text-slate-600'
+            }`}
+          >
+            Transportista
+          </button>
+        )}
+        {/* Mobile: Panel Admin — solo si está autenticado como admin */}
+        {isAdminLoggedIn && (
+          <button
+            onClick={() => onSelectTab('admin')}
+            className={`px-3 py-1 rounded-lg shrink-0 font-medium flex items-center gap-1 ${
+              currentTab === 'admin' ? 'bg-purple-600 text-white font-bold' : 'text-slate-600'
+            }`}
+          >
+            Admin
+          </button>
+        )}
         {isClientLoggedIn && (
           <button
             onClick={() => onSelectTab('mis_mudanzas')}
